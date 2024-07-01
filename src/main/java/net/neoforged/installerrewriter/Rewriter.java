@@ -175,6 +175,7 @@ public class Rewriter {
         LOG.info("Processing installer {} ({}):", installer.version(), installer.path());
         for (var rewrite : rewrites) {
             LOG.info("Rewriting {} with {}", installer.version(), rewrite.name());
+            rewrite.rewrite(installer);
         }
         boolean rewritten = installer.jar().changed();
         LOG.info("Processed {}", installer.version() + (rewritten ? "" : ". Skipped."));
