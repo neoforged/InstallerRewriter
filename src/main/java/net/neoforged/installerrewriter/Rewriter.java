@@ -10,6 +10,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -137,7 +138,9 @@ public class Rewriter {
             cfs.add(provider.provideInstaller(version, exec).thenApply(this::proc));
         }
 
-        var installers = Utils.allOf(cfs).join();
+        var installers = Utils.allOf(cfs).join().stream().filter(Objects::nonNull).toList();
+
+        LOG.info("Versions to upload: {}", installers);
 
         // Then upload them
         cfs.clear();
