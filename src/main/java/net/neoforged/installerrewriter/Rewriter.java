@@ -142,6 +142,7 @@ public class Rewriter {
         // Then upload them
         cfs.clear();
         for (Installer installer : installers) {
+            if (installer == null) continue;
             cfs.add(CompletableFuture.supplyAsync(() -> {
                 provider.save(installer);
                 return installer;
