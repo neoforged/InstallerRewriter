@@ -140,7 +140,7 @@ public class Rewriter {
 
         var installers = Utils.allOf(cfs).join().stream().filter(Objects::nonNull).toList();
 
-        LOG.info("Versions to upload: {}", installers);
+        LOG.info("Versions to upload: {}", installers.stream().map(Installer::version).toList());
 
         // Then upload them
         cfs.clear();

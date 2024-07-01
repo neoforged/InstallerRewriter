@@ -79,7 +79,7 @@ public interface InstallerProvider {
                        var res = client.send(HttpRequest.newBuilder()
                                .uri(uri)
                                .DELETE().build(), HttpResponse.BodyHandlers.ofString());
-                       Rewriter.LOG.debug("Deleted from " + res.uri() + ": " + res.statusCode());
+                       Rewriter.LOG.info("Deleted from " + res.uri() + ": " + res.statusCode());
                    }
                 } catch (Exception exception) {
 
@@ -88,7 +88,7 @@ public interface InstallerProvider {
                 var res = client.send(HttpRequest.newBuilder()
                         .uri(uri)
                         .PUT(HttpRequest.BodyPublishers.ofByteArray(content)).build(), HttpResponse.BodyHandlers.ofString());
-                Rewriter.LOG.debug("Uploaded to " + res.uri() + ": " + res.statusCode());
+                Rewriter.LOG.info("Uploaded to " + res.uri() + ": " + res.statusCode());
             }
 
             @Override
@@ -110,7 +110,7 @@ public interface InstallerProvider {
                     Files.deleteIfExists(tempPath);
                     installer.jar().save(tempPath.toFile());
                     write(path, Files.readAllBytes(tempPath));
-                    Rewriter.LOG.info("Saved to {}", tempPath.toFile());
+                    Rewriter.LOG.debug("Saved to {}", tempPath.toFile());
                     final var bytes = Files.readAllBytes(tempPath);
 
                     final String name = baseName + "-" + installer.version() + "-installer";
