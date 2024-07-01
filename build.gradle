@@ -1,37 +1,12 @@
-buildscript {
-    repositories {
-        mavenLocal()
-        jcenter()
-        maven { url "https://maven.minecraftforge.net/" }
-    }
-    dependencies {
-        classpath 'net.minecraftforge.gradleutils:GradleUtils:1.0.+'
-    }
-}
-
 plugins {
-    id 'java'
-    id 'org.cadixdev.licenser' version '0.6.1'
+    id 'java-library'
     id 'com.github.johnrengelman.shadow' version '7.0.0'
 }
 
-apply plugin: 'net.minecraftforge.gradleutils'
-
-group 'net.minecraftforge'
-version = gradleutils.tagOffsetVersion
-
-java.toolchain.languageVersion = JavaLanguageVersion.of(8)
-
-license {
-    header project.file('LICENSE-header.txt')
-    include 'net/minecraftforge/ir/**/*.java'
-    newLine false
-}
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
-    mavenLocal()
     mavenCentral()
-    maven { url 'https://maven.minecraftforge.net/' }
     maven { url 'https://maven.covers1624.net/' }
 }
 
@@ -51,21 +26,15 @@ dependencies {
     shadow 'com.google.guava:guava:31.0.1-jre'
     shadow 'com.google.code.gson:gson:2.8.8'
     shadow 'net.covers1624:Quack:0.3.7.29'
-
-    shadow 'com.squareup.okhttp3:okhttp:4.9.1'
 }
 
-jar.enabled = false
 shadowJar {
-    build.dependsOn it
     configurations = [project.configurations.shadow]
-    classifier ''
+    archiveClassifier = ''
     manifest {
-        attributes 'Main-Class': 'net.minecraftforge.ir.InstallerRewriter'
+        attributes 'Main-Class': 'net.neoforged.installerrewriter.Rewriter'
         attributes 'Multi-Release': 'true'
     }
-
     exclude 'module-info.class'
     transform(com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer)
-    from file("LICENSE.txt")
 }
