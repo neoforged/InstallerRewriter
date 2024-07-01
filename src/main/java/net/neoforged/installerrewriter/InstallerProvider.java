@@ -6,6 +6,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.net.Authenticator;
+import java.net.HttpURLConnection;
 import java.net.PasswordAuthentication;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -71,11 +72,15 @@ public interface InstallerProvider {
 
             private void write(URI uri, byte[] content) throws Exception {
                 try {
-                   uri.toURL().openStream().close();
-                   var res = client.send(HttpRequest.newBuilder()
-                            .uri(uri)
-                            .DELETE().build(), HttpResponse.BodyHandlers.ofString());
-                   Rewriter.LOG.debug("Deleted from " + res.uri() + ": " + res.statusCode());
+                   var conn = (HttpURLConnection) uri.toURL().openConnection();
+                   conn.setRequestMethod("HEAD");
+                   conn.connect();
+                   if (conn.getResponseCode() == 200) {
+                       var res = client.send(HttpRequest.newBuilder()
+                               .uri(uri)
+                               .DELETE().build(), HttpResponse.BodyHandlers.ofString());
+                       Rewriter.LOG.debug("Deleted from " + res.uri() + ": " + res.statusCode());
+                   }
                 } catch (Exception exception) {
 
                 }
