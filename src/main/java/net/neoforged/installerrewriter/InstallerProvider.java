@@ -41,14 +41,14 @@ public interface InstallerProvider {
         return new InstallerProvider() {
             @Override
             public List<String> listVersions(@Nullable String filter) throws IOException {
-                var res = Utils.getLatestFromMavenMetadata(url.resolve("maven-metadata.xml"));
+                var res = Utils.getLatestFromMavenMetadata(url.resolve(artifactFolder + "/maven-metadata.xml"));
                 return filter == null ? res : res.stream().filter(str -> str.startsWith(filter)).toList();
             }
 
             @Override
             public CompletableFuture<Installer> provideInstaller(String version, Executor executor) {
                 return CompletableFuture.supplyAsync(() -> {
-                    try (final var stream = url.resolve(version + "/" + baseName + "-" + version + "-installer.jar").toURL().openStream()) {
+                    try (final var stream = url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL().openStream()) {
                         var path = Files.createTempFile(baseName + "-" + version + "-installer", ".jar");
                         Files.deleteIfExists(path);
                         Files.copy(stream, path);
@@ -91,7 +91,7 @@ public interface InstallerProvider {
                 if (installer == null) return;
 
                 try {
-                    final var path = url.resolve(installer.version() + "/" + baseName + "-" + installer.version() + "-installer.jar");
+                    final var path = url.resolve(artifactFolder + "/" + installer.version() + "/" + baseName + "-" + installer.version() + "-installer.jar");
                     final var backupDir = backup == null ? null : backup.resolve(installer.version());
                     if (backupDir != null) {
                         var bpath = backupDir.resolve(installer.path());
@@ -111,7 +111,7 @@ public interface InstallerProvider {
                     final String name = baseName + "-" + installer.version() + "-installer";
 
                     for (var entry : HASHERS.entrySet()) {
-                        var uri = url.resolve(installer.version() + "/" + name + "." + entry.getKey());
+                        var uri = url.resolve(artifactFolder + "/" + installer.version() + "/" + name + "." + entry.getKey());
                         write(uri, entry.getValue().hashBytes(bytes).asBytes());
                     }
 
