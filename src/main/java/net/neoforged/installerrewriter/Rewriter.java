@@ -1,9 +1,9 @@
 package net.neoforged.installerrewriter;
 
-import joptsimple.OptionParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import picocli.CommandLine;
 
 import java.io.File;
 import java.net.URI;
@@ -22,45 +22,88 @@ public class Rewriter {
         this.rewrites = rewrites;
     }
 
+    public static class Args {
+        @CommandLine.Option(names = "--filter", description = "A version filter")
+        public String filter;
+
+        @CommandLine.Option(names = "--backup", description = "The directory to backup files to")
+        public Path backupDir;
+
+        @CommandLine.ArgGroup(multiplicity = "1")
+        public Provider provider;
+
+        public static class Provider {
+
+            @CommandLine.ArgGroup(exclusive = false)
+            public Maven maven;
+
+            @CommandLine.ArgGroup(exclusive = false)
+            public Directory directory;
+
+            public static class Maven {
+                @CommandLine.Option(names = "--maven-url", description = "The URL of the maven repository")
+                public URI url;
+
+                @CommandLine.Option(names = "--maven-user")
+                public String user;
+
+                @CommandLine.Option(names = "--maven-password")
+                public String password;
+
+                @CommandLine.Option(names = "--maven-path")
+                public String mavenPath;
+            }
+
+            public static class Directory {
+                @CommandLine.Option(names = "--rewrite-directory")
+                public File dir;
+            }
+        }
+
+        @CommandLine.Option(names = "--installer-version-update", description = "Update to the latest installer version", negatable = true)
+        public boolean updateVersion;
+
+        @CommandLine.Option(names = "--thread-limit", description = "The maximum amount of threads the rewriter can use")
+        public int threadLimit = -1;
+
+        @CommandLine.Option(names = "--dry")
+        public boolean dry;
+    }
+
     public static void main(String[] args) throws Exception {
-        final var cmd = new OptionParser();
-        final var versionFilter = cmd.accepts("filter", "A version filter").withRequiredArg();
-        final var rewriteMaven = cmd.accepts("rewrite-maven", "If true, the artifacts will be rewritten on maven").withRequiredArg().ofType(URI.class);
-        final var mavenUser = cmd.accepts("maven-user").requiredIf(rewriteMaven).withRequiredArg().ofType(String.class);
-        final var mavenToken = cmd.accepts("maven-token").requiredIf(rewriteMaven).withRequiredArg().ofType(String.class);
-        final var mavenPath = cmd.accepts("maven-path", "The path of the installer artifacts").requiredIf(rewriteMaven).withRequiredArg().ofType(String.class);
-        final var rewriteDir = cmd.accepts("rewrite-dir", "Sets a directory to rewrite artifacts in").withRequiredArg().ofType(File.class);
-        final var backupPath = cmd.accepts("backup", "Sets the backup directory").withRequiredArg().ofType(File.class);
+        var arguments = new Args();
+        new CommandLine(arguments).parseArgs(args);
 
-        final var newVersionUpdate = cmd.accepts("installer-version-update", "Update to the latest installer version");
-        final var threadLimit = cmd.accepts("thread-limit", "The maximum amount of threads the rewriter can use").withRequiredArg().ofType(Integer.class);
-
-        final var options = cmd.parse(args);
         InstallerProvider provider;
-        if (options.has(rewriteDir)) {
-            provider = InstallerProvider.fromDir(options.valueOf(rewriteDir).toPath(), options.has(backupPath) ? options.valueOf(backupPath).toPath() : null);
-        } else if (options.has(rewriteMaven)) {
-            provider = InstallerProvider.fromMaven(options.valueOf(rewriteMaven), options.valueOf(mavenUser), options.valueOf(mavenToken), options.valueOf(mavenPath), options.has(backupPath) ? options.valueOf(backupPath).toPath() : null);
+        if (arguments.provider.directory != null) {
+            provider = InstallerProvider.fromDir(arguments.provider.directory.dir.toPath(), arguments.backupDir);
         } else {
-            throw new RuntimeException("No provider found");
+            var prov = arguments.provider.maven;
+            provider = InstallerProvider.fromMaven(prov.url, prov.user, prov.password, prov.mavenPath, arguments.backupDir);
         }
 
         final List<InstallerRewrite> rewrites = new ArrayList<>();
-        if (options.has(newVersionUpdate)) {
+        if (arguments.updateVersion) {
             final var latestVersion = Utils.getURL("https://maven.neoforged.net/api/maven/latest/version/releases/net%2Fneoforged%2Flegacyinstaller?filter=3.&type=json").get("version").getAsString();
             final var latestPath = Path.of("installer-" + latestVersion + ".jar");
             Utils.download("https://maven.neoforged.net/releases/net/neoforged/legacyinstaller/%s/legacyinstaller-%s-shrunk.jar".formatted(latestVersion, latestVersion), latestPath);
             rewrites.add(new NewVersionUpdate(JarContents.loadJar(latestPath.toFile())));
         }
 
-        new Rewriter(rewrites).run(provider, provider.listVersions(options.has(versionFilter) ? options.valueOf(versionFilter) : null), options.has(threadLimit) ? options.valueOf(threadLimit) : null);
+        if (arguments.dry) {
+            var versions = provider.listVersions(arguments.filter);
+            LOG.info("Found {} versions to rewrite.", versions.size());
+            LOG.info("Versions: {}", versions);
+        } else {
+            new Rewriter(rewrites).run(provider, provider.listVersions(arguments.filter), arguments.threadLimit > 0 ? arguments.threadLimit : null);
+        }
     }
 
     private final List<InstallerRewrite> rewrites;
 
     public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit) throws Exception {
         LOG.info("Found {} versions to rewrite.", versions.size());
-        LOG.info("Versions: {}", versions.size());
+        LOG.info("Versions: {}", versions);
 
         final var cfs = new ArrayList<CompletableFuture<?>>();
         final Executor exec;

@@ -36,8 +36,8 @@ public interface InstallerProvider {
 
     static InstallerProvider fromMaven(URI url, String user, String token, String artifactPath, @Nullable Path backup) {
         var splitPath = artifactPath.split(":");
-        var baseFolder = splitPath[0].replace('.', '/');
         var baseName = splitPath[1];
+        var artifactFolder = splitPath[0].replace('.', '/') + "/" + baseName;
         return new InstallerProvider() {
             @Override
             public List<String> listVersions(@Nullable String filter) throws IOException {
@@ -52,7 +52,7 @@ public interface InstallerProvider {
                         var path = Files.createTempFile(baseName + "-" + version + "-installer", ".jar");
                         Files.deleteIfExists(path);
                         Files.copy(stream, path);
-                        var ins = new Installer(baseFolder + "/" + baseName + "-" + version + "-installer.jar", version, JarContents.loadJar(path.toFile()));
+                        var ins = new Installer(artifactFolder + "/" + baseName + "-" + version + "-installer.jar", version, JarContents.loadJar(path.toFile()));
                         Files.delete(path);
                         return ins;
                     } catch (Exception exception) {

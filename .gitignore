@@ -19,3 +19,5 @@
 # Include git important files
 !.gitmodules
 !.gitignore
+
+!.github
