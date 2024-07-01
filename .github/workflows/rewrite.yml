@@ -47,6 +47,7 @@ jobs:
           java -jar build/libs/rewriter.jar --maven-url https://maven-direct.neoforged.net/releases/ --maven-user ${{ secrets.MAVEN_USER }} --maven-password ${{ secrets.MAVEN_PASSWORD }} --maven-path ${{ inputs.maven-artifact }} --backup=installerbackup ${{ inputs.dry && '--dry' || '' }} ${{ inputs.version-filter && format('--filter={0}', inputs.version-filter) || '' }} --thread-limit=10 ${{ inputs.update-installer-rewrite && '--installer-version-update' || '' }}
 
       - uses: actions/upload-artifact@v4
+        if: always() 
         with:
           name: backup
           path: installerbackup/
