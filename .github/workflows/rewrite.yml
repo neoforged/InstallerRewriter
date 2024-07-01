@@ -1,4 +1,5 @@
 name: Rewrite installers
+run-name: Rewrite installers ${{ inputs.version-filter && inputs.version-filter || 'all' }}
 
 on:
   workflow_dispatch:
