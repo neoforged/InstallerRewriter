@@ -105,7 +105,7 @@ public class Rewriter {
         LOG.info("Found {} versions to rewrite.", versions.size());
         LOG.info("Versions: {}", versions);
 
-        final var cfs = new ArrayList<CompletableFuture<?>>();
+        final var cfs = new ArrayList<CompletableFuture<Installer>>();
         final Executor exec;
         final AutoCloseable closeableExec;
 
@@ -131,11 +131,24 @@ public class Rewriter {
                 }
             };
         }
+
+        // First process and provide all versions
         for (final String version : versions) {
-            cfs.add(provider.provideInstaller(version, exec)
-                    .thenApply(this::proc)
-                    .thenAccept(provider::save));
+            cfs.add(provider.provideInstaller(version, exec).thenApply(this::proc));
         }
+
+        var installers = Utils.allOf(cfs).join();
+
+        // Then upload them
+        cfs.clear();
+        for (Installer installer : installers) {
+            cfs.add(CompletableFuture.supplyAsync(() -> {
+                provider.save(installer);
+                return installer;
+            }, exec));
+        }
+
+        // And wait for the upload to complete
         CompletableFuture.allOf(cfs.toArray(CompletableFuture[]::new)).join();
 
         closeableExec.close();

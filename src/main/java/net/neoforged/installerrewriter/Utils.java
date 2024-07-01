@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPathConstants;
@@ -20,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class Utils {
     public static final Gson GSON = new Gson();
@@ -69,5 +69,12 @@ public class Utils {
         } catch (Exception exception) {
             throw new RuntimeException(exception);
         }
+    }
+
+    public static <T> CompletableFuture<List<T>> allOf(List<CompletableFuture<T>> futuresList) {
+        CompletableFuture<Void> allFuturesResult = CompletableFuture.allOf(futuresList.toArray(CompletableFuture[]::new));
+        return allFuturesResult.thenApply(v ->
+                futuresList.stream().map(CompletableFuture::join).toList()
+        );
     }
 }
