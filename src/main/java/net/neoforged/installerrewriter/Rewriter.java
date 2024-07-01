@@ -103,7 +103,7 @@ public class Rewriter {
     private final List<InstallerRewrite> rewrites;
 
     public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit) throws Exception {
-        LOG.info("Found {} versions to rewrite.", versions.size());
+        LOG.warn("Found {} versions to rewrite.", versions.size());
         LOG.info("Versions: {}", versions);
 
         final var cfs = new ArrayList<CompletableFuture<Installer>>();
@@ -140,7 +140,7 @@ public class Rewriter {
 
         var installers = Utils.allOf(cfs).join().stream().filter(Objects::nonNull).toList();
 
-        LOG.info("Versions to upload: {}", installers.stream().map(Installer::version).toList());
+        LOG.warn("Versions to upload: {}", installers.stream().map(Installer::version).toList());
 
         // Then upload them
         cfs.clear();
