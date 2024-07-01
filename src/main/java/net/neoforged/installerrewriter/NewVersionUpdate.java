@@ -4,13 +4,14 @@ import java.io.IOException;
 import java.util.Objects;
 
 public record NewVersionUpdate(JarContents newVersion, String version) implements InstallerRewrite {
+    public static final String ATTR = "net/minecraftforge/installer/";
     public NewVersionUpdate(JarContents newVersion) throws IOException {
-        this(newVersion, newVersion.getManifest().getMainAttributes().getValue("Implementation-Version"));
+        this(newVersion, newVersion.getManifest().getAttributes(ATTR).getValue("Implementation-Version"));
     }
 
     @Override
     public void rewrite(Installer installer) throws Exception {
-        if (Objects.equals(installer.jar().getManifest().getMainAttributes().getValue("Implementation-Version"), version)) return;
+        if (installer.jar().getManifest().getAttributes(ATTR) != null && Objects.equals(installer.jar().getManifest().getAttributes(ATTR).getValue("Implementation-Version"), version)) return;
 
         // Remove previous classes
         installer.jar().deleteFolder("net");
