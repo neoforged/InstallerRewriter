@@ -1,5 +1,5 @@
 name: Rewrite installers
-run-name: Rewrite installers ${{ inputs.version-filter && inputs.version-filter || 'all' }}
+run-name: Rewrite installers ${{ inputs.version-filter && inputs.version-filter || 'all' }}${{ inputs.checksums-only && ' checksums' || '' }}
 
 on:
   workflow_dispatch:
