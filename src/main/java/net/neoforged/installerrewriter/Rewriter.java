@@ -152,6 +152,7 @@ public class Rewriter {
                 cfs.add(CompletableFuture.runAsync(() -> {
                     try {
                         provider.backup(version);
+                        LOG.info("Backed up {}", version);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
