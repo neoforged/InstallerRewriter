@@ -139,6 +139,8 @@ public class Rewriter {
                 }
                 try {
                     threaded.execute(command);
+                } catch (Exception ex) {
+                    LOG.error("Failed to run action: ", ex);
                 } finally {
                     semaphore.release();
                 }
