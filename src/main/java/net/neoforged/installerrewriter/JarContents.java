@@ -79,6 +79,11 @@ class JarContents {
         this.timestamps = timestamps;
     }
 
+    public void clear() {
+        data.clear();
+        timestamps.clear();
+    }
+
     public Manifest getManifest() throws IOException {
         if (manifest == null) {
             try (var is = getInput(MANIFEST)) {

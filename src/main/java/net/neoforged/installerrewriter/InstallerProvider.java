@@ -33,6 +33,14 @@ public interface InstallerProvider {
 
     CompletableFuture<Installer> provideInstaller(String version, Executor executor);
 
+    default boolean exists(String version) throws IOException {
+        return false;
+    }
+
+    default void backup(String version) throws IOException {
+
+    }
+
     void save(@Nullable Installer installer);
 
     static InstallerProvider fromMaven(URI url, String user, String token, String artifactPath, @Nullable Path backup) {
@@ -49,10 +57,14 @@ public interface InstallerProvider {
             @Override
             public CompletableFuture<Installer> provideInstaller(String version, Executor executor) {
                 return CompletableFuture.supplyAsync(() -> {
-                    try (final var stream = url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL().openStream()) {
+                    try {
+                        var conn = (HttpURLConnection) url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL().openConnection();
+                        conn.connect();
+                        if (conn.getResponseCode() == 404) return null;
                         var path = Files.createTempFile(baseName + "-" + version + "-installer", ".jar");
                         Files.deleteIfExists(path);
-                        Files.copy(stream, path);
+                        Files.copy(conn.getInputStream(), path);
+                        conn.getInputStream().close();
                         var ins = new Installer(artifactFolder + "/" + baseName + "-" + version + "-installer.jar", version, JarContents.loadJar(path.toFile()));
                         Files.delete(path);
                         return ins;
@@ -60,6 +72,14 @@ public interface InstallerProvider {
                         throw new RuntimeException(exception);
                     }
                 }, executor);
+            }
+
+            @Override
+            public boolean exists(String version) throws IOException {
+                var conn = (HttpURLConnection) url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL().openConnection();
+                conn.setRequestMethod("HEAD");
+                conn.connect();
+                return conn.getResponseCode() == 200;
             }
 
             private final HttpClient client = HttpClient.newBuilder()
@@ -71,24 +91,44 @@ public interface InstallerProvider {
                     }).build();
 
             private void write(URI uri, byte[] content) throws Exception {
-                try {
-                   var conn = (HttpURLConnection) uri.toURL().openConnection();
-                   conn.setRequestMethod("HEAD");
-                   conn.connect();
-                   if (conn.getResponseCode() == 200) {
-                       var res = client.send(HttpRequest.newBuilder()
-                               .uri(uri)
-                               .DELETE().build(), HttpResponse.BodyHandlers.ofString());
-                       Rewriter.LOG.info("Deleted from " + res.uri() + ": " + res.statusCode());
-                   }
-                } catch (Exception exception) {
+                final Runnable delete = () -> {
+                    try {
+                        var conn = (HttpURLConnection) uri.toURL().openConnection();
+                        conn.setRequestMethod("HEAD");
+                        conn.connect();
+                        if (conn.getResponseCode() == 200) {
+                            var res = client.send(HttpRequest.newBuilder()
+                                    .uri(uri)
+                                    .DELETE().build(), HttpResponse.BodyHandlers.ofString());
+                            Rewriter.LOG.info("Deleted from " + res.uri() + ": " + res.statusCode());
+                        }
+                    } catch (Exception exception) {
 
-                }
+                    }
+                };
 
-                var res = client.send(HttpRequest.newBuilder()
+                int statusCode;
+                while ((statusCode = client.send(HttpRequest.newBuilder()
                         .uri(uri)
-                        .PUT(HttpRequest.BodyPublishers.ofByteArray(content)).build(), HttpResponse.BodyHandlers.ofString());
-                Rewriter.LOG.info("Uploaded to " + res.uri() + ": " + res.statusCode());
+                        .PUT(HttpRequest.BodyPublishers.ofByteArray(content)).build(), HttpResponse.BodyHandlers.ofString()).statusCode()) != 200) {
+                    delete.run();
+                }
+                Rewriter.LOG.info("Uploaded to " + uri + ": " + statusCode);
+            }
+
+            @Override
+            public void backup(String version) throws IOException {
+                final var path = url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar");
+                if (backup != null) {
+                    var bpath = backup.resolve(artifactFolder).resolve(version).resolve(baseName + "-" + version + "-installer.jar");
+                    Files.createDirectories(bpath.getParent());
+                    var conn = (HttpURLConnection) path.toURL().openConnection();
+                    conn.connect();
+                    if (conn.getResponseCode() == 404) return;
+                    try (final var stream = conn.getInputStream()) {
+                        Files.copy(stream, bpath);
+                    }
+                }
             }
 
             @Override
@@ -97,14 +137,7 @@ public interface InstallerProvider {
 
                 try {
                     final var path = url.resolve(artifactFolder + "/" + installer.version() + "/" + baseName + "-" + installer.version() + "-installer.jar");
-                    final var backupDir = backup == null ? null : backup.resolve(installer.version());
-                    if (backupDir != null) {
-                        var bpath = backupDir.resolve(installer.path());
-                        Files.createDirectories(bpath.getParent());
-                        try (final var stream = path.toURL().openStream()) {
-                            Files.copy(stream, bpath);
-                        }
-                    }
+                    backup(installer.version());
 
                     var tempPath = Files.createTempFile(baseName + "-" + installer.version() + "-installer", ".jar");
                     Files.deleteIfExists(tempPath);
@@ -172,7 +205,7 @@ public interface InstallerProvider {
                     final String name = path.getFileName().toString();
                     final Path parent = path.getParent();
                     for (final var suffix : List.of(
-                           "md5", "sha1", "sha256", "sha512"
+                            "md5", "sha1", "sha256", "sha512"
                     )) {
                         toRemove.add(name + "." + suffix);
                         toRemove.add(name + ".asc." + suffix);

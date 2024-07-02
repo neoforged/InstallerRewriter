@@ -6,11 +6,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import picocli.CommandLine;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -69,6 +69,9 @@ public class Rewriter {
 
         @CommandLine.Option(names = "--dry")
         public boolean dry;
+
+        @CommandLine.Option(names = "--backup-only", description = "Only backup the versions")
+        public boolean backupOnly;
     }
 
     public static void main(String[] args) throws Exception {
@@ -95,18 +98,24 @@ public class Rewriter {
             var versions = provider.listVersions(arguments.filter);
             LOG.info("Found {} versions to rewrite.", versions.size());
             LOG.info("Versions: {}", versions);
+
+            for (var ver : versions) {
+                if (!provider.exists(ver)) {
+                    LOG.warn("{} doesn't have an installer", ver);
+                }
+            }
         } else {
-            new Rewriter(rewrites).run(provider, provider.listVersions(arguments.filter), arguments.threadLimit > 0 ? arguments.threadLimit : null);
+            new Rewriter(rewrites).run(provider, provider.listVersions(arguments.filter), arguments.threadLimit > 0 ? arguments.threadLimit : null, arguments.backupOnly);
         }
     }
 
     private final List<InstallerRewrite> rewrites;
 
-    public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit) throws Exception {
+    public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit, boolean backupOnly) throws Exception {
         LOG.warn("Found {} versions to rewrite.", versions.size());
         LOG.info("Versions: {}", versions);
 
-        final var cfs = new ArrayList<CompletableFuture<Installer>>();
+        final var cfs = new ArrayList<CompletableFuture<?>>();
         final Executor exec;
         final AutoCloseable closeableExec;
 
@@ -120,10 +129,13 @@ public class Rewriter {
             closeableExec = threaded;
             final var semaphore = new Semaphore(limit);
             exec = command -> {
-                try {
-                    semaphore.acquire();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                boolean acquired = false;
+                while (!acquired) {
+                    try {
+                        semaphore.acquire();
+                        acquired = true;
+                    } catch (InterruptedException ignored) {
+                    }
                 }
                 try {
                     threaded.execute(command);
@@ -133,23 +145,26 @@ public class Rewriter {
             };
         }
 
-        // First process and provide all versions
-        for (final String version : versions) {
-            cfs.add(provider.provideInstaller(version, exec).thenApply(this::proc));
-        }
-
-        var installers = Utils.allOf(cfs).join().stream().filter(Objects::nonNull).toList();
-
-        LOG.warn("Versions to upload: {}", installers.stream().map(Installer::version).toList());
-
-        // Then upload them
-        cfs.clear();
-        for (Installer installer : installers) {
-            if (installer == null) continue;
-            cfs.add(CompletableFuture.supplyAsync(() -> {
-                provider.save(installer);
-                return installer;
-            }, exec));
+        if (backupOnly) {
+            for (final String version : versions) {
+                cfs.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        provider.backup(version);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }, exec));
+            }
+        } else {
+            for (final String version : versions) {
+                cfs.add(provider.provideInstaller(version, exec).thenApply(this::proc)
+                        .thenAccept(inst -> {
+                            if (inst != null) {
+                                provider.save(inst);
+                                inst.jar().clear();
+                            }
+                        }));
+            }
         }
 
         // And wait for the upload to complete
@@ -164,6 +179,8 @@ public class Rewriter {
     }
 
     public Installer proc(Installer installer) {
+        if (installer == null) return null;
+
         try {
             return process(installer);
         } catch (Exception ex) {
