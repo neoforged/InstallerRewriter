@@ -7,11 +7,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.PasswordAuthentication;
 import java.net.URI;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -38,6 +41,14 @@ public interface InstallerProvider {
     }
 
     default void backup(String version) throws IOException {
+
+    }
+
+    default URL resolveUrl(String version) throws MalformedURLException {
+        return null;
+    }
+
+    default void updateChecksums(URL url) throws Exception {
 
     }
 
@@ -75,8 +86,29 @@ public interface InstallerProvider {
             }
 
             @Override
+            public URL resolveUrl(String version) throws MalformedURLException {
+                return url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL();
+            }
+
+            @Override
+            public void updateChecksums(URL url) throws Exception {
+                var conn = (HttpURLConnection) url.openConnection();
+                conn.connect();
+                if (conn.getResponseCode() != 200) return;
+
+                byte[] bytes;
+                try (var is = conn.getInputStream()) {
+                    bytes = is.readAllBytes();
+                }
+                for (var entry : HASHERS.entrySet()) {
+                    var uri = URI.create(url + "." + entry.getKey());
+                    write(uri, entry.getValue().hashBytes(bytes).toString().getBytes(StandardCharsets.UTF_8), false);
+                }
+            }
+
+            @Override
             public boolean exists(String version) throws IOException {
-                var conn = (HttpURLConnection) url.resolve(artifactFolder + "/" + version + "/" + baseName + "-" + version + "-installer.jar").toURL().openConnection();
+                var conn = (HttpURLConnection) resolveUrl(version).openConnection();
                 conn.setRequestMethod("HEAD");
                 conn.connect();
                 return conn.getResponseCode() == 200;
@@ -90,7 +122,7 @@ public interface InstallerProvider {
                         }
                     }).build();
 
-            private void write(URI uri, byte[] content) throws Exception {
+            private void write(URI uri, byte[] content, boolean genChecksum) throws Exception {
                 final Runnable delete = () -> {
                     try {
                         var conn = (HttpURLConnection) uri.toURL().openConnection();
@@ -110,6 +142,7 @@ public interface InstallerProvider {
                 int statusCode;
                 while ((statusCode = client.send(HttpRequest.newBuilder()
                         .uri(uri)
+                        .header("X-Generate-Checksums", Boolean.toString(genChecksum))
                         .PUT(HttpRequest.BodyPublishers.ofByteArray(content)).build(), HttpResponse.BodyHandlers.ofString()).statusCode()) != 200) {
                     delete.run();
                 }
@@ -142,17 +175,8 @@ public interface InstallerProvider {
                     var tempPath = Files.createTempFile(baseName + "-" + installer.version() + "-installer", ".jar");
                     Files.deleteIfExists(tempPath);
                     installer.jar().save(tempPath.toFile());
-                    write(path, Files.readAllBytes(tempPath));
+                    write(path, Files.readAllBytes(tempPath), true);
                     Rewriter.LOG.debug("Saved to {}", tempPath.toFile());
-                    final var bytes = Files.readAllBytes(tempPath);
-
-                    final String name = baseName + "-" + installer.version() + "-installer";
-
-                    for (var entry : HASHERS.entrySet()) {
-                        var uri = url.resolve(artifactFolder + "/" + installer.version() + "/" + name + "." + entry.getKey());
-                        write(uri, entry.getValue().hashBytes(bytes).asBytes());
-                    }
-
                     Files.delete(tempPath);
                 } catch (Exception exception) {
                     throw new RuntimeException(exception);

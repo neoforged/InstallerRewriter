@@ -72,6 +72,9 @@ public class Rewriter {
 
         @CommandLine.Option(names = "--backup-only", description = "Only backup the versions")
         public boolean backupOnly;
+
+        @CommandLine.Option(names = "--update-checksums", description = "Update the installer checksums")
+        public boolean updateChecksums;
     }
 
     public static void main(String[] args) throws Exception {
@@ -105,13 +108,13 @@ public class Rewriter {
                 }
             }
         } else {
-            new Rewriter(rewrites).run(provider, provider.listVersions(arguments.filter), arguments.threadLimit > 0 ? arguments.threadLimit : null, arguments.backupOnly);
+            new Rewriter(rewrites).run(provider, provider.listVersions(arguments.filter), arguments.threadLimit > 0 ? arguments.threadLimit : null, arguments.backupOnly, arguments.updateChecksums);
         }
     }
 
     private final List<InstallerRewrite> rewrites;
 
-    public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit, boolean backupOnly) throws Exception {
+    public void run(InstallerProvider provider, List<String> versions, @Nullable Integer limit, boolean backupOnly, boolean updateChecksums) throws Exception {
         LOG.warn("Found {} versions to rewrite.", versions.size());
         LOG.info("Versions: {}", versions);
 
@@ -154,6 +157,16 @@ public class Rewriter {
                         provider.backup(version);
                         LOG.info("Backed up {}", version);
                     } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }, exec));
+            }
+        } else if (updateChecksums) {
+            for (final String version : versions) {
+                cfs.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        provider.updateChecksums(provider.resolveUrl(version));
+                    } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 }, exec));
