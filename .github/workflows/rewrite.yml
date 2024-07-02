@@ -49,7 +49,7 @@ jobs:
       - name: Backup jars
         if: inputs.dry == false && inputs.checksums-only == false
         run: |
-          java -Xmx6G -jar build/libs/rewriter.jar --maven-url https://maven-direct.neoforged.net/releases/ --maven-user ${{ secrets.MAVEN_USER }} --maven-password ${{ secrets.MAVEN_PASSWORD }} --maven-path ${{ inputs.maven-artifact }} --backup=installerbackup ${{ inputs.version-filter && format('--filter={0}', inputs.version-filter) || '' }} --thread-limit=10 --backup-only
+          java -Xmx6G -jar build/libs/rewriter.jar --maven-url https://maven.neoforged.net/releases/ --maven-user ${{ secrets.MAVEN_USER }} --maven-password ${{ secrets.MAVEN_PASSWORD }} --maven-path ${{ inputs.maven-artifact }} --backup=installerbackup ${{ inputs.version-filter && format('--filter={0}', inputs.version-filter) || '' }} --thread-limit=10 --backup-only
       - uses: actions/upload-artifact@v4
         if: always() 
         with:
@@ -57,4 +57,4 @@ jobs:
           path: installerbackup/
       - name: Rewrite jars
         run: |
-          java -Xmx6G -jar build/libs/rewriter.jar --maven-url https://maven-direct.neoforged.net/releases/ --maven-user ${{ secrets.MAVEN_USER }} --maven-password ${{ secrets.MAVEN_PASSWORD }} --maven-path ${{ inputs.maven-artifact }} --backup=installerbackup2 ${{ inputs.dry && '--dry' || '' }} ${{ inputs.version-filter && format('--filter={0}', inputs.version-filter) || '' }} --thread-limit=10 ${{ inputs.update-installer-rewrite && '--installer-version-update' || '' }} ${{ inputs.checksums-only && '--update-checksums' || '' }}
+          java -Xmx6G -jar build/libs/rewriter.jar --maven-url https://maven.neoforged.net/releases/ --maven-user ${{ secrets.MAVEN_USER }} --maven-password ${{ secrets.MAVEN_PASSWORD }} --maven-path ${{ inputs.maven-artifact }} --backup=installerbackup2 ${{ inputs.dry && '--dry' || '' }} ${{ inputs.version-filter && format('--filter={0}', inputs.version-filter) || '' }} --thread-limit=10 ${{ inputs.update-installer-rewrite && '--installer-version-update' || '' }} ${{ inputs.checksums-only && '--update-checksums' || '' }}
